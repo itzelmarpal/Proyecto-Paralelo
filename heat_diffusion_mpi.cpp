@@ -13,6 +13,10 @@ double ALPHA = 0.1;
 int ITERATIONS = 2000;
 int recs = 10;
 
+int suma(int x, int y) {
+  return x + y;
+}
+
 double heat_diffusion(double u_ij,
                       double u_im1j, 
                       double u_ip1j,
