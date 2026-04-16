@@ -76,7 +76,7 @@ int main(){
             for(int i = 0; i < n_triangles; i++){
                 getline(gmsh_file, line);
                 stringstream ss(line);
-
+                // EN CONSTRUCCIOOON
                 double n_nodes;
                 ss >> n_nodes;
                 if(n_nodes == 3){
