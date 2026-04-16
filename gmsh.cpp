@@ -80,7 +80,6 @@ int main(){
                 double n_nodes;
                 ss >> n_nodes;
                 if(n_nodes == 3){
-                    n
                     double p1, p2, p3;
                     ss >> p1 >> p2 >> p3;
                     trian new_triangle;
