@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <iomanip>
 #include <string>
 using namespace std;
 
@@ -28,6 +29,9 @@ struct point {
 
 int main(){
 
+    vector <point> points;
+    int n_points = 0;
+
     // Abrimos el archivo .vtk en modo lectura
     ifstream gmsh_file;
     gmsh_file.open("Malla_Ejemplo.vtk");
@@ -40,19 +44,28 @@ int main(){
         // Llegamos a la lista de coordenadas de todos los nodos
         if ((line.length() >= 6) && (line.substr(0, 6) == "POINTS")){
             vector<string> words = split_sentence(line);
-            int n_points = stoi(words[1].substr()); 
+            n_points = stoi(words[1].substr()); 
 
-            // Creamos un vector de puntos para guardar la informacion
-            vector <point> points(n_points);
+            // Ajustamos el tamaño al vector de puntos
+            points.resize(n_points);
             for(int i = 0; i < n_points; i++){
-                
+                getline(gmsh_file, line);
+                stringstream ss(line);
+
+                double val1, val2;
+                if (ss >> val1 >> val2) {
+                    points[i].x = val1;
+                    points[i].y = val2;
+                }
             }
         }
     }
-
-    
+    /*
+    cout << fixed << setprecision(16);
+    for(int i = 0; i < n_points; i++)
+        cout << points[i].x << " " << points[i].y << endl;
 
     gmsh_file.close();
-
+    */
     return 0;
 }
