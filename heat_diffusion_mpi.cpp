@@ -1,3 +1,5 @@
+// XD AYUDA MAMA ME MORI
+
 #include<iostream>
 #include<vector>
 #include <fstream>
