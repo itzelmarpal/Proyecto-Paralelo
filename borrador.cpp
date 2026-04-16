@@ -61,7 +61,7 @@ bool vtxInCommon(trian t1, trian t2){
         count++;
     if((t1.p2 == t2.p1) || (t1.p2 == t2.p2) || (t1.p2 == t2.p3))
         count++;
-    if((t1.p1 == t2.p1) || (t1.p1 == t2.p2) || (t1.p1 == t2.p3))
+    if((t1.p3 == t2.p1) || (t1.p3 == t2.p2) || (t1.p3 == t2.p3))
         count++;
     return (count == 2);
 }
@@ -213,9 +213,11 @@ int main(){
         }
     }
     gmsh_file.close();
-
+    
+    neighbours.resize(n_triangles);
+    
     for(int i = 0; i < n_triangles; i++){
-        for(int j = i; j < n_triangles; j++){
+        for(int j = i + 1; j < n_triangles; j++){
             if (vtxInCommon(triangles[i], triangles[j])){
                 neighbours[i].push_back(j);
                 neighbours[j].push_back(i);
