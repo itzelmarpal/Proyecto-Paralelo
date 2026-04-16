@@ -4,6 +4,7 @@
 #include <vector>
 #include <iomanip>
 #include <string>
+#include <math.h>
 using namespace std;
 
 // LECTURA DE DATOS GMSH
@@ -22,9 +23,12 @@ vector<string> split_sentence(string sen) {
     return words;
 }
 
-struct point{
+struct point {
     double x;
     double y;
+    point operator+(const point& other) const {
+        return {x + other.x, y + other.y};
+    }
 };
 
 struct trian{
@@ -33,10 +37,15 @@ struct trian{
     long long p3;
 };
 
-int main(){
+double f(point p) {
+    double x = p.x, y = p.y;
+    return 20 * (sin(4 * x) * sin(3 * y) + 0.3 * cos(6 * x) * sin(5 * y) + 1);
+}
 
-    vector <point> points;
-    vector <trian> triangles;
+int main(){
+    vector<point> points;
+    vector<trian> triangles;
+    vector<vector<int>> neighbours; // HACE FALTA LLENAR ESTA!!
     int n_points = 0;
     int n_triangles = 0;
     int counter_triangles = 0;
@@ -112,7 +121,45 @@ int main(){
             }
         }
     }
-
     gmsh_file.close();
+
+    // centroids[i]: centroid of triangle i.
+    vector<point> centroids(n_triangles, {0.0, 0.0});
+
+    for (int i = 0; i < n_triangles; i++) {
+        centroids[i] = centroids[i] + points[triangles[i].p1];
+        centroids[i] = centroids[i] + points[triangles[i].p2];
+        centroids[i] = centroids[i] + points[triangles[i].p3];
+        centroids[i].x /= 3;
+        centroids[i].y /= 3;
+    }
+
+    // gradients[i]: approximation of grad f evaluated at centroids[i].
+    vector<point> gradients(n_triangles);
+
+    // Compute gradient evaluated at centroids
+    for (int i = 0; i < n_triangles; i++) {
+        double S_xx = 0.0;
+        double S_yy = 0.0;
+        double S_xy = 0.0;
+        double S_xf = 0.0;
+        double S_yf = 0.0;
+
+        for (int j : neighbours[i]) {
+            double delta_x = centroids[j].x - centroids[i].x;
+            double delta_y = centroids[j].y - centroids[i].y;
+            double delta_f = f(centroids[j]) - f(centroids[i]);
+            S_xx += delta_x * delta_x;
+            S_yy += delta_y * delta_y;
+            S_xy += delta_x * delta_y;
+            S_xf += delta_x * delta_f;
+            S_yf += delta_y * delta_f;
+        }
+
+        double D = S_xx * S_yy - S_xy * S_xy;
+        gradients[i].x = (S_yy * S_xf - S_xy * S_yf) / D;
+        gradients[i].y = (S_xx * S_yf - S_xy * S_xf) / D;
+    }
+
     return 0;
 }
