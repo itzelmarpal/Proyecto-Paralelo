@@ -22,15 +22,24 @@ vector<string> split_sentence(string sen) {
     return words;
 }
 
-struct point {
+struct point{
     double x;
     double y;
+};
+
+struct trian{
+    long long p1;
+    long long p2;
+    long long p3;
 };
 
 int main(){
 
     vector <point> points;
+    vector <trian> triangles;
     int n_points = 0;
+    int n_triangles = 0;
+    int counter = 0;
 
     // Abrimos el archivo .vtk en modo lectura
     ifstream gmsh_file;
@@ -56,6 +65,32 @@ int main(){
                 if (ss >> val1 >> val2) {
                     points[i].x = val1;
                     points[i].y = val2;
+                }
+            }
+        }
+
+        if ((line.length() >= 5) && (line.substr(0, 5) == "CELLS")){
+            vector<string> words = split_sentence(line);
+            n_triangles = stoi(words[1].substr());
+
+            for(int i = 0; i < n_triangles; i++){
+                getline(gmsh_file, line);
+                stringstream ss(line);
+
+                double n_nodes;
+                ss >> n_nodes;
+                if(n_nodes == 3){
+                    n
+                    double p1, p2, p3;
+                    ss >> p1 >> p2 >> p3;
+                    trian new_triangle;
+                        new_triangle.p1 = p1;
+                        new_triangle.p2 = p2;
+                        new_triangle.p3 = p3;
+                    triangles.append(new_triangle);
+                }
+                else{
+                    counter++;
                 }
             }
         }
