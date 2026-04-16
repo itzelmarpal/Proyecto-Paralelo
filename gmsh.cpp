@@ -39,7 +39,7 @@ int main(){
     vector <trian> triangles;
     int n_points = 0;
     int n_triangles = 0;
-    int counter = 0;
+    int counter_triangles = 0;
 
     // Abrimos el archivo .vtk en modo lectura
     ifstream gmsh_file;
@@ -72,34 +72,47 @@ int main(){
         if ((line.length() >= 5) && (line.substr(0, 5) == "CELLS")){
             vector<string> words = split_sentence(line);
             n_triangles = stoi(words[1].substr());
+            bool triangles_on_the_way = true;
 
-            for(int i = 0; i < n_triangles; i++){
+            while(triangles_on_the_way){
+
                 getline(gmsh_file, line);
                 stringstream ss(line);
-                // EN CONSTRUCCIOOON
                 double n_nodes;
                 ss >> n_nodes;
+
                 if(n_nodes == 3){
+                    n_triangles = n_triangles - counter_triangles;
+                    triangles.resize(n_triangles);
+
                     double p1, p2, p3;
                     ss >> p1 >> p2 >> p3;
                     trian new_triangle;
-                        new_triangle.p1 = p1;
-                        new_triangle.p2 = p2;
-                        new_triangle.p3 = p3;
-                    triangles.append(new_triangle);
+
+                    triangles[0].p1 = p1;
+                    triangles[0].p2 = p2;
+                    triangles[0].p3 = p3;
+                    triangles_on_the_way = false;
                 }
                 else{
-                    counter++;
+                    counter_triangles++;
                 }
+            }
+            for(int i = 1; i < n_triangles; i++){
+                getline(gmsh_file, line);
+                stringstream ss(line);
+
+                double p1, p2, p3, trash;
+                ss >> trash >> p1 >> p2 >> p3;
+
+                trian new_triangle;
+                triangles[i].p1 = p1;
+                triangles[i].p2 = p2;
+                triangles[i].p3 = p3;
             }
         }
     }
-    /*
-    cout << fixed << setprecision(16);
-    for(int i = 0; i < n_points; i++)
-        cout << points[i].x << " " << points[i].y << endl;
 
     gmsh_file.close();
-    */
     return 0;
 }
