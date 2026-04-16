@@ -1,4 +1,4 @@
-// XD AYUDA MAMA ME MORI
+// https://prod.liveshare.vsengsaas.visualstudio.com/join?576215F71825055F2EAFA6A20B4A2EABC02B
 
 #include<iostream>
 #include<vector>
