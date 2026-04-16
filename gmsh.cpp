@@ -4,29 +4,27 @@
 #include <vector>
 #include <string>
 using namespace std;
-// Inciso 1
+
 // LECTURA DE DATOS GMSH
 
+// Funcion que separa un renglon en palabras
 vector<string> split_sentence(string sen) {
-  
-    // Create a stringstream object
+
     stringstream ss(sen);
-    
-    // Variable to hold each word
     string word;
-    
-    // Vector to store the words
     vector<string> words;
-    
-    // Extract words from the sentence
+
     while (ss >> word) {
-      
-        // Add the word to the vector
         words.push_back(word);
     }
     
     return words;
 }
+
+struct point {
+    double x;
+    double y;
+};
 
 int main(){
 
@@ -35,11 +33,20 @@ int main(){
     gmsh_file.open("Malla_Ejemplo.vtk");
 
     string line;
+
+    // Leemos cada renglon del archivo
     while(getline(gmsh_file, line)){
+
+        // Llegamos a la lista de coordenadas de todos los nodos
         if ((line.length() >= 6) && (line.substr(0, 6) == "POINTS")){
             vector<string> words = split_sentence(line);
             int n_points = stoi(words[1].substr()); 
-            cout << n_points << endl;
+
+            // Creamos un vector de puntos para guardar la informacion
+            vector <point> points(n_points);
+            for(int i = 0; i < n_points; i++){
+                
+            }
         }
     }
 
