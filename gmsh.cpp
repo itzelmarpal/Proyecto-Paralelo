@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <string>
 #include <math.h>
+#include <chrono>
 using namespace std;
 
 // LECTURA DE DATOS GMSH
@@ -123,7 +124,11 @@ int main(){
             }
         }
     }
+    cout << "\n\tInput .vtk succesfully read." << endl;
     gmsh_file.close();
+
+    // Start timer
+    auto start = chrono::steady_clock::now();
 
     // centroids[i]: centroid of triangle i.
     vector<point> centroids(n_triangles, {0.0, 0.0});
@@ -194,6 +199,22 @@ int main(){
     vector<double> real_point_val(n_points);
     for (int i = 0; i < n_points; i++)
         real_point_val[i] = f(points[i]);
+
+    // Stop timer
+    auto stop = chrono::steady_clock::now();
+    // Compute execution time
+    auto duration = chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+    // Compute max error
+    double max_error = 0.0;
+    for (int i = 0; i < n_points; i++) 
+        max_error = max(max_error, abs(point_val[i] - real_point_val[i]));
+    
+    // Print results
+    cout << "\n\tN_POINTS:\t" << n_points << endl;
+    cout << "\tN_TRIANGLES:\t" << n_triangles << endl;
+    cout << "\tExecution time (microseconds):\t" << duration.count() << endl;
+    cout << "\tMax error:\t" << max_error << endl;
 
     return 0;
 }
