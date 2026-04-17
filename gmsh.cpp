@@ -141,6 +141,9 @@ int main(){
     // Start timer
     auto start = chrono::steady_clock::now();
 
+    // 1 - crear local_neighbours
+    // 2 - llenar local_neighbours para los triangulos del proceso actual
+    
     // neighbours[t]: indexes of triangles neighbouring with triangle t.
     // Adjacency lists of dual graph of triangulation.
     vector<vector<long long>> neighbours(n_triangles);
@@ -154,6 +157,11 @@ int main(){
         }
     }
 
+    // 1 - CREATE local_centroids
+    // 2 - calcular centroides de triangulos correspondientes a ese proceso
+    // 3 - pegar todos los local_centroids en un vector centroids
+    // 4 - broadcastear a todos los nodos
+    // 3 y 4 se hacen solo en el proceso 0
     // centroids[i]: centroid of triangle i.
     vector<point> centroids(n_triangles, {0.0, 0.0});
     // Compute centroids.
@@ -165,6 +173,10 @@ int main(){
         centroids[t].y /= 3;
     }
 
+    // 1- crear local_gradients
+    // 2 - calcularlo (es casi igual, solo se cambia el primer for)
+    // 3 - pegar los local gradients en el proceso 0 (pa imprimir)
+    
     // gradients[i]: approximation of grad f evaluated at centroids[i].
     vector<point> gradients(n_triangles);
     // Compute gradient evaluated at centroids.
@@ -193,6 +205,11 @@ int main(){
 
     // ----- INTERPOLATION -----
 
+    // 1 - crear versiones locales de estos vectores (siguen teniendo tamaño n_points)
+    // 2 - paralelizar el ciclo for respecto a los triangulos, actualizando los vectores locales
+    // 3 - juntar los vectores locales en vectores globales en el proceso 0
+    //      con MPI_Reduce() o algo así jeje
+
     // point_val[i]: mean value of f(centroids[j]) for all triangles j incident
     // on vertex i.
     vector<double> point_val(n_points, 0);
@@ -201,7 +218,6 @@ int main(){
     vector<point> point_grad(n_points, {0.0, 0.0});
     // incident_triangles_cnt[i]: # of triangles incident on vertex i.
     vector<int> incident_triangles_cnt(n_points, 0);
-    
     for (long long t = 0; t < n_triangles; t++) {
         long long triangle_vertices[3] = {triangles[t].p1, triangles[t].p2, triangles[t].p3};
         for (long long p : triangle_vertices) {
@@ -211,6 +227,9 @@ int main(){
         }
     }
 
+    // 1 - cada proceso le pide al proceso 0 la información de sus puntos asociados
+    // 2 - cada proceso calcula el promedio (lo que sea hace al interior de este ciclo for)
+    // 3 - cada proceso le manda al proceso 0 el promedio con MPI_Gather() o algo así jeje
     for (long long i = 0; i < n_points; i++) {
         point_val[i] /= incident_triangles_cnt[i];
         point_grad[i].x /= incident_triangles_cnt[i];
