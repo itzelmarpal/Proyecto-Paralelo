@@ -45,13 +45,24 @@ double f(point p) {
     return 20 * (sin(4 * x) * sin(3 * y) + 0.3 * cos(6 * x) * sin(5 * y) + 1);
 }
 
+bool areNeighbours(const trian& T1, const trian& T2) {
+    long long T1_vertices[3] = {T1.p1, T1.p2, T1.p3};
+    long long T2_vertices[3] = {T2.p1, T2.p2, T2.p3};
+    int shared_vert = 0;
+    for (long long p : T1_vertices) 
+        for (long long q : T2_vertices)
+            if (p == q) shared_vert++;
+    if (shared_vert == 2) 
+        return true;
+    return false;
+}
+
 int main(){
     vector<point> points;
     vector<trian> triangles;
-    vector<vector<int>> neighbours; // HACE FALTA LLENAR ESTA!!
-    int n_points = 0;
-    int n_triangles = 0;
-    int counter_triangles = 0;
+    long long n_points = 0;
+    long long n_triangles = 0;
+    long long counter_triangles = 0;
 
     // Abrimos el archivo .vtk en modo lectura
     ifstream gmsh_file;
@@ -130,10 +141,23 @@ int main(){
     // Start timer
     auto start = chrono::steady_clock::now();
 
+    // neighbours[t]: indexes of triangles neighbouring with triangle t.
+    // Adjacency lists of dual graph of triangulation.
+    vector<vector<long long>> neighbours(n_triangles);
+    // Compute adjacency lists.
+    for (long long t = 0; t < n_triangles; t++) {
+        for (long long s = t + 1; s < n_triangles; s++) {
+            if ( areNeighbours(triangles[t], triangles[s]) ) {
+                neighbours[t].push_back(s);
+                neighbours[s].push_back(t);
+            }
+        }
+    }
+
     // centroids[i]: centroid of triangle i.
     vector<point> centroids(n_triangles, {0.0, 0.0});
-
-    for (int t = 0; t < n_triangles; t++) {
+    // Compute centroids.
+    for (long long t = 0; t < n_triangles; t++) {
         centroids[t] += points[triangles[t].p1];
         centroids[t] += points[triangles[t].p2];
         centroids[t] += points[triangles[t].p3];
@@ -143,16 +167,15 @@ int main(){
 
     // gradients[i]: approximation of grad f evaluated at centroids[i].
     vector<point> gradients(n_triangles);
-
-    // Compute gradient evaluated at centroids
-    for (int t = 0; t < n_triangles; t++) {
+    // Compute gradient evaluated at centroids.
+    for (long long t = 0; t < n_triangles; t++) {
         double S_xx = 0.0;
         double S_yy = 0.0;
         double S_xy = 0.0;
         double S_xf = 0.0;
         double S_yf = 0.0;
 
-        for (int s : neighbours[t]) {
+        for (long long s : neighbours[t]) {
             double delta_x = centroids[s].x - centroids[t].x;
             double delta_y = centroids[s].y - centroids[t].y;
             double delta_f = f(centroids[s]) - f(centroids[t]);
@@ -179,16 +202,16 @@ int main(){
     // incident_triangles_cnt[i]: # of triangles incident on vertex i.
     vector<int> incident_triangles_cnt(n_points, 0);
     
-    for (int t = 0; t < n_triangles; t++) {
-        int triangle_vertices[3] = {triangles[t].p1, triangles[t].p2, triangles[t].p3};
-        for (int p : triangle_vertices) {
+    for (long long t = 0; t < n_triangles; t++) {
+        long long triangle_vertices[3] = {triangles[t].p1, triangles[t].p2, triangles[t].p3};
+        for (long long p : triangle_vertices) {
             incident_triangles_cnt[p]++;
             point_val[p] += f(centroids[t]);
             point_grad[p] += gradients[t];
         }
     }
 
-    for (int i = 0; i < n_points; i++) {
+    for (long long i = 0; i < n_points; i++) {
         point_val[i] /= incident_triangles_cnt[i];
         point_grad[i].x /= incident_triangles_cnt[i];
         point_grad[i].y /= incident_triangles_cnt[i];
@@ -197,7 +220,7 @@ int main(){
     // real_point_val[i]: stores f(points[i]), the analytic value of f
     // evaluated at point i.
     vector<double> real_point_val(n_points);
-    for (int i = 0; i < n_points; i++)
+    for (long long i = 0; i < n_points; i++)
         real_point_val[i] = f(points[i]);
 
     // Stop timer
@@ -207,7 +230,7 @@ int main(){
 
     // Compute max error
     double max_error = 0.0;
-    for (int i = 0; i < n_points; i++) 
+    for (long long i = 0; i < n_points; i++) 
         max_error = max(max_error, abs(point_val[i] - real_point_val[i]));
     
     // Print results
