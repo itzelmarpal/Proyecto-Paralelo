@@ -163,28 +163,54 @@ int main(){
     // Start timer
     double start = MPI_Wtime();
 
-    // neighbours[t]: indexes of triangles neighbouring with triangle t.
+        // neighbours[t]: indexes of triangles neighbouring with triangle t.
     // Adjacency lists of dual graph of triangulation.
-    vector<vector<long long>> neighbours(n_triangles);
+    
+    local_np = n_points / n_tasks;
+    local_nt = n_triangles / n_tasks;
+
+    // 1 - crear local_neighbours
+    vector<vector<long long>> local_neighbours(local_nt);
+    long long triang_it = rank * local_nt;
+
+    // 2 - llenar local_neighbours para los triangulos del proceso actual
     // Compute adjacency lists.
-    for (long long t = 0; t < n_triangles; t++) {
-        for (long long s = t + 1; s < n_triangles; s++) {
-            if ( areNeighbours(triangles[t], triangles[s]) ) {
-                neighbours[t].push_back(s);
-                neighbours[s].push_back(t);
-            }
-        }
+    for(long long t = triang_it; t < triang_it + local_nt; t++){
+        for(long long s = 0; s < n_triangles; s++){
+            if (areNeighbours(triangles[t], triangles[s]))
+                local_neighbours[t % local_nt].push_back(s);
     }
 
-    // centroids[i]: centroid of triangle i.
-    vector<point> centroids(n_triangles, {0.0, 0.0});
-    // Compute centroids.
-    for (long long t = 0; t < n_triangles; t++) {
-        centroids[t] += points[triangles[t].p1];
-        centroids[t] += points[triangles[t].p2];
-        centroids[t] += points[triangles[t].p3];
-        centroids[t].x /= 3;
-        centroids[t].y /= 3;
+    // 1 - CREATE local_centroids
+    vector<point> local_centroids(local_nt, {0.0, 0.0});
+
+    // 2 - calcular centroides de triangulos correspondientes a ese proceso
+
+    for(long long t = 0; t < local_nt; t++){
+        if(triang_it + t >= n_triangles)
+            break
+        local_centroids[t] += points[triangles[triang_it + t].p1];
+        local_centroids[t] += points[triangles[triang_it + t].p2];
+        local_centroids[t] += points[triangles[triang_it + t].p3];
+        local_centroids[t].x /= 3;
+        local_centroids[t].y /= 3;
+    }
+
+    // 3 - pegar todos los local_centroids en un vector centroids
+    // FALTA ARREGLAR PARA QUE EL ULTIMO PROCESO NO SALGA DEL VECTOR CENTROIDS
+    vector<point> centroids;
+    if (rank == 0)
+        centroids.resize(n_triangles);
+    if (rank != 0) {
+        MPI_Send(local_centroids.data(), local_nt, MPI_POINT, 0, 0, MPI_COMM_WORLD);
+    } 
+    else {
+        for (long long t = 0; t < local_nt; t++) {
+            centroids[triang_it + t] = local_centroids[t];
+        }
+        for (int p = 1; p < n_tasks; p++){
+            MPI_Recv(&centroids[local_nt * rank], local_nt, MPI_POINT, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
     }
 
     // gradients[i]: approximation of grad f evaluated at centroids[i].
