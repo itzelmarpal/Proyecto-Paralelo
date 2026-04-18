@@ -190,6 +190,7 @@ int main(){
         for(long long s = 0; s < n_triangles; s++){
             if (areNeighbours(triangles[t], triangles[s]))
                 local_neighbours[triang_it - t].push_back(s);
+        }
     }
 
     // 1 - CREATE local_centroids
