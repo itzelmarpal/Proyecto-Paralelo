@@ -205,12 +205,11 @@ int main(){
         MPI_Send(local_centroids.data(), local_nt, MPI_POINT, 0, 0, MPI_COMM_WORLD);
     } 
     else {
-        for (long long t = 0; t < local_nt; t++) {
+        for (long long t = 0; t < local_nt; t++)
             centroids[triang_it + t] = local_centroids[t];
-        }
-        for (int p = 1; p < n_tasks; p++){
+        for (int p = 1; p < n_tasks; p++)
             MPI_Recv(&centroids[local_nt * rank], local_nt, MPI_POINT, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }
+        MPI_Bcast(&centroids, n_triangles, POINT, 0, MPI_COMM_WORLD);
     }
 
     // gradients[i]: approximation of grad f evaluated at centroids[i].
