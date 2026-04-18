@@ -307,12 +307,24 @@ int main(){
         MPI_Reduce(local_pgrad.data(), point_grad.data(), n_points, POINT, 
                     POINT_SUM, 0, MPI_COMM_WORLD);
     }
-    // now we must and paralelize this :
-    for (long long i = 0; i < n_points; i++) {
-        point_val[i] /= incident_triangles_cnt[i];
-        point_grad[i].x /= incident_triangles_cnt[i];
-        point_grad[i].y /= incident_triangles_cnt[i];
+    
+    MPI_Scatter(point_val.data(), local_np, MPI_DOUBLE, local_pval.data(), 
+                local_np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Scatter(point_grad.data(), local_np, POINT, local_pgrad.data(), 
+                local_np, POINT, 0, MPI_COMM_WORLD);
+    MPI_Scatter(trian_cnt.data(), local_np, MPI_INT, local_trian_cnt.data(),
+                local_np, MPI_INT, 0, MPI_COMM_WORLD);
+    for (long long i = 0; i < local_np; i++) {
+        local_pval[i] /= local_trian_cnt[i];
+        local_pgrad[i].x /= local_trian_cnt[i];
+        local_pgrad[i].y /= local_trian_cnt[i];
     }
+    MPI_Gather(local_pval.data(), local_np, MPI_DOUBLE, point_val.data(), 
+                local_np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gather(local_pgrad.data(), local_np, POINT, point_grad.data(),
+                local_np, POINT, 0, MPI_COMM_WORLD);
+    MPI_Gather(local_trian_cnt.data(), local_np, MPI_INT, trian_cnt.data(),
+                local_np, MPI_INT, 0, MPI_COMM_WORLD);
     // Stop timer
     double stop = MPI_Wtime();
     // Compute execution time
