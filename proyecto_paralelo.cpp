@@ -133,7 +133,7 @@ void write_vtk(const string& filename,
 
 int main(){
     int n_tasks, rank;
-    MPI_INIT(NULL, NULL);
+    MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &n_tasks);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -228,14 +228,18 @@ int main(){
         }
         cout << "\n\tInput .vtk succesfully read." << endl;
         gmsh_file.close();
-
-        // Broadcast to all processes n_points, n_triangles, points 
-        // and triangles
-        MPI_Bcast(&n_points, 1, MPI_LONG_LONG, 0, MPI_COMM_WORLD);
-        MPI_Bcast(&n_triangles, 1, MPI_LONG_LONG,  0, MPI_COMM_WORLD);
-        MPI_Bcast(points.data(), n_points, POINT, 0, MPI_COMM_WORLD);
-        MPI_Bcast(triangles.data(), n_triangles, TRIAN, 0, MPI_COMM_WORLD);
     }
+
+    // Broadcast to all processes n_points, n_triangles, points 
+    // and triangles
+    MPI_Bcast(&n_points, 1, MPI_LONG_LONG, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&n_triangles, 1, MPI_LONG_LONG,  0, MPI_COMM_WORLD);
+    if (rank != 0) {
+        points.resize(n_points);
+        triangles.resize(n_triangles);
+    }
+    MPI_Bcast(points.data(), n_points, POINT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(triangles.data(), n_triangles, TRIAN, 0, MPI_COMM_WORLD);
 
     // Start timer
     double start = MPI_Wtime();
@@ -255,7 +259,7 @@ int main(){
     for(long long t = triang_it; t < triang_it + local_nt; t++){
         for(long long s = 0; s < n_triangles; s++){
             if (areNeighbours(triangles[t], triangles[s]))
-                local_neighbours[triang_it - t].push_back(s);
+                local_neighbours[t - triang_it].push_back(s);
         }
     }
 
@@ -276,19 +280,21 @@ int main(){
 
     // 3 - pegar todos los local_centroids en un vector centroids
     // FALTA ARREGLAR PARA QUE EL ULTIMO PROCESO NO SALGA DEL VECTOR CENTROIDS
-    vector<point> centroids;
-    if (rank == 0)
-        centroids.resize(n_triangles);
+    vector<point> centroids(n_triangles);
+    MPI_Allgather(local_centroids.data(), local_nt, POINT, centroids.data(), 
+                    local_nt, POINT, MPI_COMM_WORLD);
+    /*
     if (rank != 0) {
-        MPI_Send(local_centroids.data(), local_nt, MPI_POINT, 0, 0, MPI_COMM_WORLD);
+        MPI_Send(local_centroids.data(), local_nt, POINT, 0, 0, MPI_COMM_WORLD);
     } 
     else {
         for (long long t = 0; t < local_nt; t++)
             centroids[triang_it + t] = local_centroids[t];
         for (int p = 1; p < n_tasks; p++)
-            MPI_Recv(&centroids[local_nt * rank], local_nt, MPI_POINT, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&centroids[local_nt * rank], local_nt, POINT, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Bcast(&centroids, n_triangles, POINT, 0, MPI_COMM_WORLD);
     }
+    */
 
     // ---------- GRADIENTS
     vector<point> local_gradients(local_nt);
@@ -374,12 +380,12 @@ int main(){
                     POINT_SUM, 0, MPI_COMM_WORLD);
     }
     
-    MPI_Scatter(point_val.data(), local_np, MPI_DOUBLE, local_pval.data(), 
-                local_np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Scatter(point_grad.data(), local_np, POINT, local_pgrad.data(), 
-                local_np, POINT, 0, MPI_COMM_WORLD);
-    MPI_Scatter(trian_cnt.data(), local_np, MPI_INT, local_trian_cnt.data(),
-                local_np, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Scatter(rank == 0 ? point_val.data() : nullptr, local_np, MPI_DOUBLE,
+                local_pval.data(), local_np, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Scatter(rank == 0 ? point_grad.data() : nullptr, local_np, POINT, 
+                local_pgrad.data(), local_np, POINT, 0, MPI_COMM_WORLD);
+    MPI_Scatter(rank == 0 ? trian_cnt.data() : nullptr, local_np, MPI_INT, 
+                local_trian_cnt.data(), local_np, MPI_INT, 0, MPI_COMM_WORLD);
     for (long long i = 0; i < local_np; i++) {
         local_pval[i] /= local_trian_cnt[i];
         local_pgrad[i].x /= local_trian_cnt[i];
@@ -404,7 +410,7 @@ int main(){
     // Print results
     cout << "\n\tN_POINTS:\t" << n_points << endl;
     cout << "\tN_TRIANGLES:\t" << n_triangles << endl;
-    cout << "\tExecution time (microseconds):\t" << duration.count() << endl;
+    cout << "\tExecution time (microseconds):\t" << duration << endl;
     cout << "\tMax error:\t" << max_error << endl;
 
     if (rank == 0)
