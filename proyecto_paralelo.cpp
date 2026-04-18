@@ -212,64 +212,90 @@ int main(){
         MPI_Bcast(&centroids, n_triangles, POINT, 0, MPI_COMM_WORLD);
     }
 
-    // gradients[i]: approximation of grad f evaluated at centroids[i].
-    vector<point> gradients(n_triangles);
-    // Compute gradient evaluated at centroids.
-    for (long long t = 0; t < n_triangles; t++) {
+    // ---------- GRADIENTS
+    vector<point> local_gradients(local_nt);
+    vector<point> gradients;
+    for (long long t = 0; t < local_nt; t++) {
         double S_xx = 0.0;
         double S_yy = 0.0;
         double S_xy = 0.0;
         double S_xf = 0.0;
         double S_yf = 0.0;
-
-        for (long long s : neighbours[t]) {
-            double delta_x = centroids[s].x - centroids[t].x;
-            double delta_y = centroids[s].y - centroids[t].y;
-            double delta_f = f(centroids[s]) - f(centroids[t]);
+        // t is a local index. t_global is a global index.
+        long long t_global = t + local_nt * rank;
+        // s is a global index
+        for (long long s : local_neighbours[t]) {
+            double delta_x = centroids[s].x - centroids[t_global].x;
+            double delta_y = centroids[s].y - centroids[t_global].y;
+            double delta_f = f(centroids[s]) - f(centroids[t_global]);
             S_xx += delta_x * delta_x;
             S_yy += delta_y * delta_y;
             S_xy += delta_x * delta_y;
             S_xf += delta_x * delta_f;
             S_yf += delta_y * delta_f;
-        }
-
+        } 
         double D = S_xx * S_yy - S_xy * S_xy;
-        gradients[t].x = (S_yy * S_xf - S_xy * S_yf) / D;
-        gradients[t].y = (S_xx * S_yf - S_xy * S_xf) / D;
+        local_gradients[t].x = (S_yy * S_xf - S_xy * S_yf) / D;
+        local_gradients[t].y = (S_xx * S_yf - S_xy * S_xf) / D;
     }
-
-    // real_point_val[i]: stores f(points[i]), the analytic value of f
-    // evaluated at point i.
-    vector<double> real_point_val(n_points);
-    for (long long i = 0; i < n_points; i++)
-        real_point_val[i] = f(points[i]);
+    // Gather local_gradients in process 0
+    if (rank == 0) {
+        gradients.resize(n_triangles);
+        MPI_Gather(local_gradients.data(), local_nt, POINT, gradients.data(), 
+                    local_nt, POINT, 0, MPI_COMM_WORLD);
+        // Then we write in .vtk file
+    } 
+        
+    // ---------- ANALYTIC F VALUE
+    // local real_point_val
+    vector<double> local_rpv(local_np);
+    vector<double> real_point_val;
+    for (long long i = 0; i < local_nt; i++) {
+        long long global_i = i + rank * local_np;
+        local_rpv[i] = f(points[global_i]);
+    }
+    // Gather local_rpv's in process 0
+    if (rank == 0) {
+        real_point_val.resize(n_points);
+        MPI_Gather(local_rpv.data(), local_np, MPI_DOUBLE, 
+                    real_point_val.data(), local_np, MPI_DOUBLE, 
+                    0, MPI_COMM_WORLD);
+        // again... we write this in .vtk file
+    }
 
     // ----- INTERPOLATION -----
-
-    // point_val[i]: mean value of f(centroids[j]) for all triangles j incident
-    // on vertex i.
-    vector<double> point_val(n_points, 0);
-    // point_grad[i]: mean value of gradients[j] for all triangles j incident
-    // on vertex i.
-    vector<point> point_grad(n_points, {0.0, 0.0});
-    // incident_triangles_cnt[i]: # of triangles incident on vertex i.
-    vector<int> incident_triangles_cnt(n_points, 0);
-    
-    for (long long t = 0; t < n_triangles; t++) {
-        long long triangle_vertices[3] = {triangles[t].p1, triangles[t].p2, triangles[t].p3};
-        for (long long p : triangle_vertices) {
-            incident_triangles_cnt[p]++;
-            point_val[p] += f(centroids[t]);
-            point_grad[p] += gradients[t];
+    // These three use global indexing
+    vector<double> local_pval(n_points, 0.0);
+    vector<point> local_pgrad(n_points, {0.0, 0.0});
+    vector<int> local_trian_cnt(n_points, 0);
+    vector<double> point_val;
+    vector<point> point_grad;
+    vector<int> trian_cnt;
+    for (long long t = 0; t < local_nt; t++) {  // t: local index
+        long long t_global = t + rank * local_nt;
+        long long vertices[3] = {   
+                                    triangles[t_global].p1, 
+                                    triangles[t_global].p2, 
+                                    triangles[t_global].p3
+                                };
+        for (long long p : vertices) {  // p global index
+            local_trian_cnt[p]++;
+            local_pval[p] += f(centroids[t_global]);
+            local_pgrad[p] += local_gradients[t];
         }
     }
-
+    if (rank == 0) {
+        point_val.assign(n_points, 0.0);
+        point_grad.assign(n_points, {0.0, 0.0});
+        trian_cnt.assign(n_points, 0);
+    }
+    // now we must merge local vectors into global vectors in rank 0
+    // and paralelize this :
     for (long long i = 0; i < n_points; i++) {
         point_val[i] /= incident_triangles_cnt[i];
         point_grad[i].x /= incident_triangles_cnt[i];
         point_grad[i].y /= incident_triangles_cnt[i];
     }
-
     // Stop timer
     double stop = MPI_Wtime();
     // Compute execution time
