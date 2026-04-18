@@ -328,5 +328,9 @@ int main(){
     cout << "\tExecution time (microseconds):\t" << duration.count() << endl;
     cout << "\tMax error:\t" << max_error << endl;
 
+    MPI_Type_free(&TRIAN);
+    MPI_Type_free(&POINT);
+    MPI_Finalize();
+
     return 0;
 }
