@@ -178,7 +178,7 @@ int main(){
     for(long long t = triang_it; t < triang_it + local_nt; t++){
         for(long long s = 0; s < n_triangles; s++){
             if (areNeighbours(triangles[t], triangles[s]))
-                local_neighbours[t % local_nt].push_back(s);
+                local_neighbours[triang_it - t].push_back(s);
     }
 
     // 1 - CREATE local_centroids
