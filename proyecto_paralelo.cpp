@@ -188,7 +188,7 @@ int main(){
 
     for(long long t = 0; t < local_nt; t++){
         if(triang_it + t >= n_triangles)
-            break
+            break;
         local_centroids[t] += points[triangles[triang_it + t].p1];
         local_centroids[t] += points[triangles[triang_it + t].p2];
         local_centroids[t] += points[triangles[triang_it + t].p3];
