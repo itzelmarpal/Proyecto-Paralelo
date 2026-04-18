@@ -57,6 +57,14 @@ bool areNeighbours(const trian& T1, const trian& T2) {
     return false;
 }
 
+void point_sum(void* inputBuffer, void* outputBuffer, int* len, MPI_Datatype* datatype) {
+    point* input = (point*) inputBuffer;
+    point* output = (point*) outputBuffer;
+    for (long long i = 0; i < *len; i++)
+        output[i] += input[i];
+    return;
+}
+
 int main(){
     int n_tasks, rank;
     MPI_INIT(NULL, NULL);
@@ -70,6 +78,9 @@ int main(){
     MPI_Datatype POINT;
     MPI_Type_vector(1, 2, 2, MPI_DOUBLE, &POINT);
     MPI_Type_commit(&POINT);
+
+    MPI_Op POINT_SUM;
+    MPI_Op_create(&point_sum, 1, &POINT_SUM);
 
     vector<point> points;
     vector<trian> triangles;
@@ -288,9 +299,14 @@ int main(){
         point_val.assign(n_points, 0.0);
         point_grad.assign(n_points, {0.0, 0.0});
         trian_cnt.assign(n_points, 0);
+        MPI_Reduce(local_trian_cnt.data(), trian_cnt.data(), n_points, MPI_INT, 
+                    MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(local_pval.data(), point_val.data(), n_points, MPI_DOUBLE, 
+                    MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(local_pgrad.data(), point_grad.data(), n_points, POINT, 
+                    POINT_SUM, 0, MPI_COMM_WORLD);
     }
-    // now we must merge local vectors into global vectors in rank 0
-    // and paralelize this :
+    // now we must and paralelize this :
     for (long long i = 0; i < n_points; i++) {
         point_val[i] /= incident_triangles_cnt[i];
         point_grad[i].x /= incident_triangles_cnt[i];
