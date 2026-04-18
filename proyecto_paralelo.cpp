@@ -65,6 +65,72 @@ void point_sum(void* inputBuffer, void* outputBuffer, int* len, MPI_Datatype* da
     return;
 }
 
+void write_vtk(const string& filename,
+               const vector<point> points,
+               const vector<trian> triangles,
+               vector<double> real_point_val,
+               vector<point> grad_analitico,
+               vector<point> point_grad)
+{
+    ofstream file(filename);
+
+    int Np = points.size();
+    int Nt = triangles.size();
+
+    file << "# vtk DataFile Version 2.0\n";
+    file << "Triangular mesh solution\n";
+    file << "ASCII\n";
+    file << "DATASET UNSTRUCTURED_GRID\n";
+
+    file << "POINTS " << Np << " double\n";
+    for (int i = 0; i < Np; i++)
+        file << points[i].x << " " << points[i].y << " 0.0\n";
+
+    int total_size = Nt * 4;
+
+    file << "CELLS " <<  Nt << " " << total_size << "\n";
+    for (auto& t : triangles) {
+        file << "3 " << t.p1 << " " << t.p2 << " " << t.p3 << "\n";
+    }
+
+    file << "CELL_TYPES " << Nt << "\n";
+    for (int i = 0; i < Nt; i++)
+        file << "5\n";
+
+    file << "POINT_DATA " << Np << "\n";
+    file << "SCALARS FuncionAnalitica double 1\n";
+    file << "LOOKUP_TABLE default\n";
+
+    for (int i = 0; i < Np; i++)
+        file << scientific << setprecision(10) << real_point_val[i] << "\n";
+    file << "VECTORS GradienteAproximado double\n";
+    for (int i = 0; i < Np; i++)
+        file << scientific << setprecision(10) << point_grad[i].x
+        << " " << point_grad[i].y << " 0.0" << "\n";
+
+    file << "SCALARS Error_X double 1\n";
+    file << "LOOKUP_TABLE default\n";
+
+    vector<point> error_grad(Np);
+
+    for(int i = 0; i < Np; i++){
+        point pnt;
+        pnt.x = fabs(point_grad[i].x - grad_analitico[i].x);
+        pnt.y = fabs(point_grad[i].y - grad_analitico[i].y);
+        error_grad.push_back(pnt);
+    }
+    
+    file << "SCALARS Error_Absoluto_X double 1\n";
+    file << "LOOKUP_TABLE default\n";
+    for (int i = 0; i < Np; i++) file << error_grad[i].x << "\n";
+
+    file << "SCALARS Error_Absoluto_Y double 1\n";
+    file << "LOOKUP_TABLE default\n";
+    for (int i = 0; i < Np; i++) file << error_grad[i].y << "\n";
+    
+    file.close();
+}
+
 int main(){
     int n_tasks, rank;
     MPI_INIT(NULL, NULL);
@@ -340,6 +406,9 @@ int main(){
     cout << "\tN_TRIANGLES:\t" << n_triangles << endl;
     cout << "\tExecution time (microseconds):\t" << duration.count() << endl;
     cout << "\tMax error:\t" << max_error << endl;
+
+    if (rank == 0)
+        write_vtk("solucion_triangulos.vtk", points, triangles, real_point_val, grad_analitico, point_grad);
 
     MPI_Type_free(&TRIAN);
     MPI_Type_free(&POINT);
