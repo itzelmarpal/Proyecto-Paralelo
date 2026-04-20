@@ -20,7 +20,6 @@ vector<string> split_sentence(string sen) {
     while (ss >> word) {
         words.push_back(word);
     }
-    
     return words;
 }
 
@@ -42,7 +41,15 @@ struct trian{
 
 double f(point p) {
     double x = p.x, y = p.y;
-    return 20 * (sin(4 * x) * sin(3 * y) + 0.3 * cos(6 * x) * sin(5 * y) + 1);
+    return 20 * (sin(4 * x) * sin(3 * y) + 0.3 * cos(6 * x) * sin(5 * y) + 1.0);
+}
+
+point grad_f(point p) {
+    double x = p.x, y = p.y;
+    point g;
+    g.x = 20.0 * (4.0 * cos(4*x) * sin(3*y) - 1.8 * sin(6*x) * sin(5*y));
+    g.y = 20.0 * (3.0 * sin(4*x) * cos(3*y) + 1.5 * cos(6*x) * cos(5*y));
+    return g;
 }
 
 bool areNeighbours(const trian& T1, const trian& T2) {
@@ -66,11 +73,11 @@ void point_sum(void* inputBuffer, void* outputBuffer, int* len, MPI_Datatype* da
 }
 
 void write_vtk(const string& filename,
-               const vector<point> points,
-               const vector<trian> triangles,
-               vector<double> real_point_val,
-               vector<point> grad_analitico,
-               vector<point> point_grad)
+               const vector<point>& points,
+               const vector<trian>& triangles,
+               const vector<double>& real_point_val,
+               const vector<point>& grad_analitico,
+               const vector<point>& point_grad)
 {
     ofstream file(filename);
 
@@ -108,9 +115,6 @@ void write_vtk(const string& filename,
         file << scientific << setprecision(10) << point_grad[i].x
         << " " << point_grad[i].y << " 0.0" << "\n";
 
-    file << "SCALARS Error_X double 1\n";
-    file << "LOOKUP_TABLE default\n";
-
     vector<point> error_grad(Np);
 
     for(int i = 0; i < Np; i++){
@@ -126,7 +130,8 @@ void write_vtk(const string& filename,
 
     file << "SCALARS Error_Absoluto_Y double 1\n";
     file << "LOOKUP_TABLE default\n";
-    for (int i = 0; i < Np; i++) file << error_grad[i].y << "\n";
+    for (int i = 0; i < Np; i++)
+        file << error_grad[i].y << "\n";
     
     file.close();
 }
@@ -199,7 +204,7 @@ int main(){
                         n_triangles = n_triangles - counter_triangles;
                         triangles.resize(n_triangles);
 
-                        double p1, p2, p3;
+                        long long p1, p2, p3;
                         ss >> p1 >> p2 >> p3;
                         trian new_triangle;
 
@@ -216,7 +221,7 @@ int main(){
                     getline(gmsh_file, line);
                     stringstream ss(line);
 
-                    double p1, p2, p3, trash;
+                    long long p1, p2, p3, trash;
                     ss >> trash >> p1 >> p2 >> p3;
 
                     trian new_triangle;
@@ -248,23 +253,20 @@ int main(){
     long long residuo_np = n_points % n_tasks;
     long long residuo_nt = n_triangles % n_tasks;
 
-    long long local_nt = partition_nt;
-    long long local_np = partition_np;
-    if(rank == n_tasks - 1){
-        local_np += residuo_np;
-        local_nt += residuo_nt;
-    }
+    long long local_nt  = partition_nt + (rank == n_tasks - 1 ? residuo_nt : 0);
+    long long local_np  = partition_np + (rank == n_tasks - 1 ? residuo_np : 0);
 
     long long triang_it = rank * partition_nt;
     long long points_it = rank * partition_np;
 
     vector<int> counts_nt(n_tasks), displs_nt(n_tasks);
     vector<int> counts_np(n_tasks), displs_np(n_tasks);
+
     for (int i = 0; i < n_tasks; i++) {
-        counts_nt[i] = base_nt + (i == n_tasks - 1 ? rem_nt : 0);
-        displs_nt[i] = i * base_nt;
-        counts_np[i] = base_np + (i == n_tasks - 1 ? rem_np : 0);
-        displs_np[i] = i * base_np;
+        counts_nt[i] = partition_nt + (i == n_tasks - 1 ? residuo_nt : 0);
+        displs_nt[i] = i * partition_nt;
+        counts_np[i] = partition_np + (i == n_tasks - 1 ? residuo_np : 0);
+        displs_np[i] = i * partition_np;
     }
 
     // Start timer
@@ -278,10 +280,11 @@ int main(){
 
     // 2 - llenar local_neighbours para los triangulos del proceso actual
     // Compute adjacency lists.
-    for(long long t = triang_it; t < triang_it + local_nt; t++){
+    for(long long t = 0; t < local_nt; t++){
+        long long global_t = t + triang_it;
         for(long long s = 0; s < n_triangles; s++){
-            if (areNeighbours(triangles[t], triangles[s]))
-                local_neighbours[t - triang_it].push_back(s);
+            if (areNeighbours(triangles[global_t], triangles[s]))
+                local_neighbours[t].push_back(s);
         }
     }
 
@@ -291,9 +294,10 @@ int main(){
     // 2 - calcular centroides de triangulos correspondientes a ese proceso
 
     for(long long t = 0; t < local_nt; t++){
-        local_centroids[t] += points[triangles[triang_it + t].p1];
-        local_centroids[t] += points[triangles[triang_it + t].p2];
-        local_centroids[t] += points[triangles[triang_it + t].p3];
+        long long global_t = t + triang_it;
+        local_centroids[t] += points[triangles[global_t].p1];
+        local_centroids[t] += points[triangles[global_t].p2];
+        local_centroids[t] += points[triangles[global_t].p3];
         local_centroids[t].x /= 3.0;
         local_centroids[t].y /= 3.0;
     }
@@ -303,18 +307,6 @@ int main(){
     vector<point> centroids(n_triangles);
     MPI_Allgatherv(local_centroids.data(), local_nt, POINT, centroids.data(), counts_nt.data(),
                    displs_nt.data(), POINT, MPI_COMM_WORLD);
-    /*
-    if (rank != 0) {
-        MPI_Send(local_centroids.data(), local_nt, POINT, 0, 0, MPI_COMM_WORLD);
-    } 
-    else {
-        for (long long t = 0; t < local_nt; t++)
-            centroids[triang_it + t] = local_centroids[t];
-        for (int p = 1; p < n_tasks; p++)
-            MPI_Recv(&centroids[local_nt * rank], local_nt, POINT, p, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        MPI_Bcast(&centroids, n_triangles, POINT, 0, MPI_COMM_WORLD);
-    }
-    */
 
     // ---------- GRADIENTS
     vector<point> local_gradients(local_nt);
@@ -326,7 +318,7 @@ int main(){
         double S_xf = 0.0;
         double S_yf = 0.0;
         // t is a local index. t_global is a global index.
-        long long t_global = t + local_nt * rank;
+        long long t_global = t + triang_it;
         // s is a global index
         for (long long s : local_neighbours[t]) {
             double delta_x = centroids[s].x - centroids[t_global].x;
@@ -343,31 +335,26 @@ int main(){
         local_gradients[t].y = (S_xx * S_yf - S_xy * S_xf) / D;
     }
     // Gather local_gradients in process 0
-    if (rank == 0) {
+    if (rank == 0)
         gradients.resize(n_triangles);
-         MPI_Gatherv(local_gradients.data(), local_nt, POINT,
-                gradients.data(), counts_nt.data(), displs_nt.data(),
-                POINT, 0, MPI_COMM_WORLD);
-        // Then we write in .vtk file
-    } 
+    MPI_Gatherv(local_gradients.data(), local_nt, POINT,
+            rank == 0 ? gradients.data() : nullptr, counts_nt.data(), displs_nt.data(),
+            POINT, 0, MPI_COMM_WORLD);
         
     // ---------- ANALYTIC F VALUE
     // local real_point_val
     vector<double> local_rpv(local_np);
     vector<double> real_point_val;
-    for (long long i = 0; i < local_nt; i++) {
-        long long global_i = i + rank * local_np;
+
+    for (long long i = 0; i < local_np; i++) {
+        long long global_i = i + points_it;
         local_rpv[i] = f(points[global_i]);
     }
-    // Gather local_rpv's in process 0
-    if (rank == 0) {
-        real_point_val.resize(n_points);
-        MPI_Gatherv(local_rpv.data(), local_np, MPI_DOUBLE,
-                real_point_val.data(), counts_np.data(), displs_np.data(),
-                MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    if (rank == 0) real_point_val.resize(n_points);
+    MPI_Gatherv(local_rpv.data(), local_np, MPI_DOUBLE,
+            rank == 0 ? real_point_val.data() : nullptr, counts_np.data(), displs_np.data(),
+            MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-        // again... we write this in .vtk file
-    }
 
     // ----- INTERPOLATION -----
     // These three use global indexing
@@ -377,8 +364,9 @@ int main(){
     vector<double> point_val;
     vector<point> point_grad;
     vector<int> trian_cnt;
+    
     for (long long t = 0; t < local_nt; t++) {  // t: local index
-        long long t_global = t + rank * local_nt;
+        long long t_global = t + triang_it;
         long long vertices[3] = {   
                                     triangles[t_global].p1, 
                                     triangles[t_global].p2, 
@@ -395,12 +383,12 @@ int main(){
         point_grad.assign(n_points, {0.0, 0.0});
         trian_cnt.assign(n_points, 0);
     }
-    MPI_Reduce(local_trian_cnt.data(), trian_cnt.data(), n_points, MPI_INT, 
-                MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(local_pval.data(), point_val.data(), n_points, MPI_DOUBLE, 
-                MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(local_pgrad.data(), point_grad.data(), n_points, POINT, 
-                POINT_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(local_trian_cnt.data(), rank == 0 ? trian_cnt.data()  : nullptr,
+               n_points, MPI_INT,    MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(local_pval.data(),      rank == 0 ? point_val.data()  : nullptr,
+               n_points, MPI_DOUBLE,  MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(local_pgrad.data(),     rank == 0 ? point_grad.data() : nullptr,
+               n_points, POINT,       POINT_SUM, 0, MPI_COMM_WORLD);
 
     vector<double> my_pval(local_np);
     vector<point>  my_pgrad(local_np);
@@ -411,10 +399,10 @@ int main(){
     MPI_Scatterv(rank == 0 ? point_grad.data() : nullptr, counts_np.data(), displs_np.data(),
                  POINT, my_pgrad.data(), local_np, POINT, 0, MPI_COMM_WORLD);
     MPI_Scatterv(rank == 0 ? trian_cnt.data()  : nullptr, counts_np.data(), displs_np.data(),
-                 MPI_INT, my_cnt.data(),   local_np, MPI_INT, 0, MPI_COMM_WORLD);
+                 MPI_INT, my_cnt.data(), local_np, MPI_INT, 0, MPI_COMM_WORLD);
 
     for (long long i = 0; i < local_np; i++) {
-        my_pval[i]    /= my_cnt[i];
+        my_pval[i] /= my_cnt[i];
         my_pgrad[i].x /= my_cnt[i];
         my_pgrad[i].y /= my_cnt[i];
     }
@@ -430,19 +418,29 @@ int main(){
     // Compute execution time
     double duration = stop - start;
 
-    // Compute max error
-    double max_error = 0.0;
-    for (long long i = 0; i < n_points; i++) 
-        max_error = max(max_error, abs(point_val[i] - real_point_val[i]));
-    
-    // Print results
-    cout << "\n\tN_POINTS:\t" << n_points << endl;
-    cout << "\tN_TRIANGLES:\t" << n_triangles << endl;
-    cout << "\tExecution time (microseconds):\t" << duration << endl;
-    cout << "\tMax error:\t" << max_error << endl;
+    // ENCERRAMOS TODO EL CÁLCULO FINAL Y ESCRITURA EN EL RANK 0
+    if (rank == 0) {
 
-    if (rank == 0)
+        vector<point> grad_analitico(n_points);
+        for (long long i = 0; i < n_points; i++)
+            grad_analitico[i] = grad_f(points[i]);
+
+        // Compute max error
+        double max_error = 0.0;
+        for (long long i = 0; i < n_points; i++) {
+            // Usamos fabs() en lugar de abs() para preservar los decimales
+            max_error = max(max_error, fabs(point_val[i] - real_point_val[i]));
+        }
+        
+        // Print results
+        cout << "\n\tN_POINTS:\t" << n_points << endl;
+        cout << "\tN_TRIANGLES:\t" << n_triangles << endl;
+        cout << "\tExecution time (microseconds):\t" << duration << endl;
+        cout << "\tMax error:\t" << scientific << setprecision(10) << max_error << endl;
+
         write_vtk("solucion_triangulos.vtk", points, triangles, real_point_val, grad_analitico, point_grad);
+    }
+
     MPI_Op_free(&POINT_SUM);
     MPI_Type_free(&TRIAN);
     MPI_Type_free(&POINT);
